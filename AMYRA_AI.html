@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AMYRA AI — Finance Tracker</title>
+<style>
+:root{--bg:#0b0b0e;--panel:#15151b;--gold:#d8b45a;--text:#f6f3ea;--muted:#aaa6a0;--green:#66d19e;--red:#ff7b7b}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#101015,#08080a);color:var(--text);font:16px/1.5 Arial,sans-serif;padding:24px}
+main{max-width:850px;margin:auto}.brand{color:var(--gold);letter-spacing:3px;font-size:13px;font-weight:bold}.tag{color:var(--muted);margin-top:2px}
+h1{margin:4px 0;font-size:clamp(30px,5vw,44px)}h1 span{color:var(--gold)}
+.panel{background:var(--panel);border:1px solid #33313a;border-radius:18px;padding:20px;margin:20px 0;box-shadow:0 12px 35px #0004}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat{background:#202027;border-radius:12px;padding:14px}.stat small{display:block;color:var(--muted)}.stat strong{font-size:clamp(18px,3vw,26px);overflow-wrap:anywhere}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 5px}input,select,button{font:inherit;border-radius:10px;padding:12px;border:1px solid #44414a}input,select{width:100%;background:#0e0e13;color:var(--text)}button{cursor:pointer;font-weight:bold;background:var(--gold);border-color:var(--gold);color:#17130a}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.actions button.secondary{background:transparent;color:var(--text);border-color:#555}
+.entry{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #33313a;padding:13px 0}.entry:last-child{border-bottom:0}.entry small{display:block;color:var(--muted)}.amount{font-weight:bold;white-space:nowrap}.income{color:var(--green)}.expense{color:var(--red)}.delete{background:transparent;color:var(--muted);border-color:#444;padding:6px 9px;margin-left:8px}
+.empty{color:var(--muted);text-align:center;padding:22px 0}.note{color:var(--muted);font-size:12px}
+@media(max-width:560px){body{padding:14px}.stats{grid-template-columns:1fr}.row{grid-template-columns:1fr}.panel{padding:15px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">AMYRA AI</div>
+  <h1>Personal <span>Finance</span></h1>
+  <div class="tag">Intelligence behind every rupee.</div>
+  <section class="panel stats">
+    <div class="stat"><small>Current balance</small><strong id="balance">₹0.00</strong></div>
+    <div class="stat"><small>Total income</small><strong id="income">₹0.00</strong></div>
+    <div class="stat"><small>Total expenses</small><strong id="expenses">₹0.00</strong></div>
+  </section>
+  <section class="panel">
+    <h2>Add a transaction</h2>
+    <form id="form">
+      <div class="row">
+        <div><label for="description">Description</label><input id="description" placeholder="e.g. Salary, groceries" maxlength="80" required></div>
+        <div><label for="amount">Amount (₹)</label><input id="amount" type="number" min="0.01" step="0.01" placeholder="500" required></div>
+      </div>
+      <div class="row">
+        <div><label for="type">Transaction type</label><select id="type"><option value="income">Income</option><option value="expense">Expense</option></select></div>
+        <div><label for="date">Date</label><input id="date" type="date" required></div>
+      </div>
+      <div class="actions"><button type="submit">＋ Add transaction</button><button class="secondary" id="clearForm" type="button">Clear form</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Transactions</h2>
+      <select id="filter" aria-label="Filter transactions" style="width:auto"><option value="all">All transactions</option><option value="income">Income only</option><option value="expense">Expenses only</option></select>
+    </div>
+    <div id="list"></div>
+    <div class="actions"><button id="export" class="secondary" type="button">Export CSV</button><button id="reset" class="secondary" type="button">Delete all data</button></div>
+    <p class="note">Your entries are stored in this browser on this device. This demo does not connect to a bank or a live AI service. Clearing browser data may erase your entries.</p>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const KEY = 'amyra-finance-transactions-v1';
+let transactions = [];
+try { transactions = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(transactions)) transactions = []; } catch { transactions = []; }
+$('date').value = new Date().toLocaleDateString('en-CA');
+const money = n => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n);
+function save(){localStorage.setItem(KEY,JSON.stringify(transactions));render();}
+function render(){
+  const inc=transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const exp=transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  $('balance').textContent=money(inc-exp); $('income').textContent=money(inc); $('expenses').textContent=money(exp);
+  const filter=$('filter').value;
+  const shown=[...transactions].filter(t=>filter==='all'||t.type===filter).sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  const list=$('list'); list.replaceChildren();
+  if(!shown.length){const p=document.createElement('div');p.className='empty';p.textContent='No transactions yet. Add your first one above.';list.append(p);return;}
+  shown.forEach(t=>{
+    const row=document.createElement('div');row.className='entry';
+    const info=document.createElement('div');const title=document.createElement('strong');title.textContent=t.description;
+    const meta=document.createElement('small');meta.textContent=new Date(t.date+'T12:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})+' · '+(t.type==='income'?'Income':'Expense');info.append(title,meta);
+    const right=document.createElement('div');right.style.display='flex';right.style.alignItems='center';
+    const amount=document.createElement('span');amount.className='amount '+t.type;amount.textContent=(t.type==='income'?'+':'−')+money(t.amount);
+    const del=document.createElement('button');del.className='delete';del.type='button';del.textContent='Delete';del.setAttribute('aria-label','Delete '+t.description);del.onclick=()=>{if(confirm('Delete this transaction?')){transactions=transactions.filter(x=>x.id!==t.id);save();}};
+    right.append(amount,del);row.append(info,right);list.append(row);
+  });
+}
+$('form').addEventListener('submit',e=>{
+ e.preventDefault();const description=$('description').value.trim();const amount=Number($('amount').value);const date=$('date').value;
+ if(!description||!Number.isFinite(amount)||amount<=0||!date){alert('Please enter a description, a positive amount, and a date.');return;}
+ transactions.push({id:Date.now()+Math.random(),description,amount,type:$('type').value,date});save();$('form').reset();$('date').value=new Date().toLocaleDateString('en-CA');$('type').value='income';$('description').focus();
+});
+$('clearForm').onclick=()=>{$('form').reset();$('date').value=new Date().toLocaleDateString('en-CA');};
+$('filter').onchange=render;
+$('reset').onclick=()=>{if(confirm('Delete all transactions? This cannot be undone.')){transactions=[];save();}};
+$('export').onclick=()=>{
+ const rows=[['Date','Description','Type','Amount'],...transactions.map(t=>[t.date,t.description,t.type,t.amount])];
+ const csv=rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download='AMYRA_AI_transactions.csv';a.click();URL.revokeObjectURL(url);
+};
+render();
+</script>
+</body>
+</html>
